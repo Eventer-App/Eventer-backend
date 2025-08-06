@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <Properties>
+        <Property name="LOG_CONSOLE_PATTERN">%highlight{%5p} - %d{yy-MM-dd HH:mm:ss.SSS} %clr{[%X{conversation}]}{magenta} %clr{[%t]}{cyan} %clr{➜}{faint} %m%n%xwEx</Property>
+        <Property name="LOG_FILE_PATTERN">%5p - %d{yy-MM-dd HH:mm:ss.SSS} [%X{conversation}] [%t] ➜ %m%n%xwEx</Property>
+        <Property name="LOG_WARN_PATTERN">%d{ISO8601} %-5p [%t] %X{conversation} [client:%X{username:--}] [extras:[%X{extras:--}]] [%logger{40}] : %m%n%ex</Property>
+        <Property name="CLR">{FATAL=bright red, ERROR=red, WARN=bright yellow, INFO=green, DEBUG=white, TRACE=black}</Property>
+    </Properties>
+    <Appenders>
+        <File name="FILE" fileName="logs/app.log" append="true">
+            <PatternLayout pattern="${LOG_FILE_PATTERN}" />
+        </File>
+        <File name="WARN_FILE" fileName="logs/appWarn.log" append="true">
+            <PatternLayout pattern="${LOG_WARN_PATTERN}" />
+            <ThresholdFilter level="WARN" onMatch="ACCEPT" onMismatch="DENY"/>
+        </File>
+        <Console name="CONSOLE" target="SYSTEM_OUT" follow="true">
+            <PatternLayout pattern="${LOG_CONSOLE_PATTERN}" disableAnsi="false"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="INFO">
+            <AppenderRef ref="CONSOLE" />
+            <AppenderRef ref="FILE" />
+            <AppenderRef ref="WARN_FILE" />
+        </Root>
+    </Loggers>
+</Configuration>
