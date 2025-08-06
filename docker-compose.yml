@@ -1,0 +1,34 @@
+version: '3.9'
+
+services:
+
+  app:
+    build: .
+    container_name: eventer-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: 'jdbc:postgresql://db:5432/EVENTER'
+      JAVA_OPTS: '-Xmx512m'
+      SPRING_PROFILES_ACTIVE: LOCAL
+    depends_on:
+      - db
+
+  db:
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: eventer
+      POSTGRES_PASSWORD: eventer
+      POSTGRES_DB: EVENTER
+    volumes:
+      - ./db:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8081:8080
