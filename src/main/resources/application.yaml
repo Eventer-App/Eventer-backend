@@ -2,6 +2,14 @@ spring:
   application:
     name: Eventer
 
+security:
+  jwt:
+    access:
+      secret: cac433e5478a3e5a438ec01b3db22695c44104f36bed25d828d9d66201188ae8
+      ttl: 7200000 # 2 часа
+    refresh:
+      secret: fe38c18a2feeab977c61a73af03a09406336aec6b23535a979164a073a4128fe
+      ttl: 86400000 # 1 день
 ---
 spring:
   config:
@@ -19,9 +27,8 @@ spring:
     hibernate:
       ddl-auto: none
 
-# todo: return this later
-#  flyway:
-#    enabled: true
-#    locations: classpath:db/migration
-#    baseline-on-migrate: true
-#    baseline-version: 0
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
