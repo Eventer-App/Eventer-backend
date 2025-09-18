@@ -3,6 +3,7 @@ package com.Eventer.Eventer.user.service
 import com.Eventer.Eventer.common.enviroment.EnvironmentConfig
 import com.Eventer.Eventer.common.token.AccessTokenHandler
 import com.Eventer.Eventer.common.token.RefreshTokenHandler
+import com.Eventer.Eventer.exception.AuthException
 import com.Eventer.Eventer.exception.GeneralException
 import com.Eventer.Eventer.exception.RegisterException
 import com.Eventer.Eventer.security.AuthType
@@ -28,6 +29,7 @@ import org.springframework.http.ResponseCookie
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Service
+import java.time.LocalDateTime
 import java.util.*
 
 @Service
@@ -44,8 +46,8 @@ class UserService(
     companion object {
         private val passwordEncoder = BCryptPasswordEncoder()
         private val logger: Logger = LoggerFactory.getLogger(UserService::class.java)
-        private val usersCash : MutableList<User> = mutableListOf()
-        private val verificationCash : MutableMap<User, Verification> = mutableMapOf()
+        private val usersCash: MutableList<User> = mutableListOf()
+        private val verificationCash: MutableMap<User, Verification> = mutableMapOf()
     }
 
     fun registerUser(userCreateRequest: UserCreateRequest, response: HttpServletResponse) {
@@ -75,8 +77,16 @@ class UserService(
             ?: verificationUserRepository.findById(verificationId)
                 .orElseThrow { GeneralException("Verification not found") }
 
+        val expired =
+            verification.createdAt.plusSeconds((verification.ttl / 1000).toLong()).isBefore(LocalDateTime.now())
+        if (expired) {
+            verificationUserRepository.delete(verification)
+            verificationCash.remove(verification.user)
+            throw GeneralException("Verification code has expired", HttpStatus.BAD_REQUEST)
+        }
+
         if (verification.code != verifyRequest.code) {
-            throw GeneralException("Invalid verification code")
+            throw GeneralException("Invalid verification code", HttpStatus.BAD_REQUEST)
         }
 
         val user = verification.user
@@ -90,11 +100,44 @@ class UserService(
         response.addCookie(createDeletionCookie("sign_method_id"))
 
         verificationUserRepository.delete(verification)
+        verificationCash.remove(user)
     }
 
-    fun logIn(userLoginRequest: UserLoginRequest, response: HttpServletResponse) {
-        val user = ownUserRepository.findByEmailIgnoreCase(userLoginRequest.email) ?: throw GeneralException("User not found")
 
+    fun logIn(userLoginRequest: UserLoginRequest, response: HttpServletResponse) {
+        val user = usersCash.find { (it as OwnUser).email == userLoginRequest.email }
+            ?: ownUserRepository.findByEmailIgnoreCase(userLoginRequest.email)
+            ?: throw RegisterException(HttpStatus.UNAUTHORIZED)
+
+        if (!passwordEncoder.matches(userLoginRequest.password, (user as OwnUser).passwordHash)) {
+            throw RegisterException(HttpStatus.UNAUTHORIZED)
+        }
+
+        if (!user.verified) {
+            setVerificationCode(user, response)
+            throw GeneralException("User is not verified, verification code resent", HttpStatus.FORBIDDEN)
+        }
+
+        generateAndSetTokens(user, response)
+    }
+
+    fun refreshToken(request: HttpServletRequest, response: HttpServletResponse) {
+        val refreshToken = request.cookies
+            ?.firstOrNull { it.name == "refresh_token" }
+            ?.value
+            ?: throw AuthException(HttpStatus.UNAUTHORIZED)
+
+        val username = refreshTokenHandler.extractUsername(refreshToken)
+        val authType = refreshTokenHandler.extractAuthType(refreshToken)
+
+        val user = findByEmailAndAuthType(username, authType) as? OwnUser
+            ?: throw AuthException(HttpStatus.UNAUTHORIZED)
+
+        if (!refreshTokenHandler.isTokenValid(refreshToken, convertUserToUserDetails(user))) {
+            throw AuthException(HttpStatus.UNAUTHORIZED)
+        }
+
+        generateAndSetTokens(user, response)
     }
 
     fun findByEmail(email: String): UserDetails? {
@@ -121,14 +164,18 @@ class UserService(
 
     }
 
-    private fun convertUserToUserDetails(user: User?): UserDetails? = when (user) {
-            is OwnUser -> CustomUserDetails(user.email, AuthType.EMAIL)
-            is GoogleUser -> CustomUserDetails(user.googleMail, AuthType.GOOGLE)
-            else -> null
+    private fun convertUserToUserDetails(user: User?): UserDetails = when (user) {
+        is OwnUser -> CustomUserDetails(user.email, AuthType.EMAIL)
+        is GoogleUser -> CustomUserDetails(user.googleMail, AuthType.GOOGLE)
+        else -> TODO()
     }
 
     private fun generateAndSetTokens(user: OwnUser, response: HttpServletResponse) {
-        setTokensInResponse(response, accessTokenHandler.generateOwnToken(user), refreshTokenHandler.generateOwnToken(user))
+        setTokensInResponse(
+            response,
+            accessTokenHandler.generateOwnToken(user),
+            refreshTokenHandler.generateOwnToken(user)
+        )
     }
 
     private fun setVerificationCode(user: OwnUser, response: HttpServletResponse) {
@@ -144,15 +191,15 @@ class UserService(
     }
 
     private fun setVerificationInResponse(verification: Verification, response: HttpServletResponse) {
-        val cookie = createCookie("sign_method_id", verification.id.toString(), verification.ttl)
+        val cookie = createCookie("sign_method_id", verification.id.toString(), verification.ttl / 1000)
         response.setHeader(HttpHeaders.SET_COOKIE, cookie.toString())
     }
 
     private fun setTokensInResponse(response: HttpServletResponse, accessToken: String, refreshToken: String) {
         val accessCookie =
-            createCookie("access_token", accessToken, accessTokenHandler.getTTL())
+            createCookie("access_token", accessToken, accessTokenHandler.getTTL() / 1000)
         val refreshCookie =
-            createCookie("refresh_token", refreshToken, refreshTokenHandler.getTTL())
+            createCookie("refresh_token", refreshToken, refreshTokenHandler.getTTL() / 1000)
 
         response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString())
         response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString())

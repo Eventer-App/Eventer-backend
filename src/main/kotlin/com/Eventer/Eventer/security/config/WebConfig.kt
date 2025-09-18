@@ -21,6 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 class WebConfig(
     private val accessTokenHandler: AccessTokenHandler,
     private val userDetailsService: UserDetailsServiceImpl,
+    private val jwtAuthenticationEntryPoint: JwtAuthenticationEntryPoint,
     private val userService: UserService,
 ) {
 
@@ -28,7 +29,8 @@ class WebConfig(
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         return http
             .csrf { it.disable() }
-            .cors { it.configurationSource(corsConfigurationSource()) } // подключаем CORS сюда
+            .cors { it.configurationSource(corsConfigurationSource()) }
+            .exceptionHandling { it.authenticationEntryPoint(jwtAuthenticationEntryPoint) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { requests ->
                 requests
@@ -37,9 +39,11 @@ class WebConfig(
                         "/api/v1/users/register/**",
                         "/api/v1/users/verify",
                         "/api/v1/users/send-code",
-                        "/refresh",
+                        "/api/v1/users/refresh",
+                        "/api/v1/users/logIn",
                     ).permitAll()
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(

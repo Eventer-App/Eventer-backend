@@ -6,7 +6,9 @@ import com.Eventer.Eventer.user.service.UserService
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.AuthenticationException
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource
 import org.springframework.web.filter.OncePerRequestFilter
@@ -25,7 +27,7 @@ class AuthenticationFilter(
     ) {
         try {
             val jwtToken: String? = when (request.requestURI) {
-                "/refresh" -> getTokenFromRequest(request,  "refresh_token")
+                "/refresh" -> getTokenFromRequest(request, "refresh_token")
                 else -> getTokenFromRequest(request, "access_token")
             }
 
@@ -35,33 +37,27 @@ class AuthenticationFilter(
                 userService.findByEmailAndAuthType(username, authType)
                 val userDetails = userDetailsService.loadUserByUsername(username)
 
-                if (tokenHandler.isTokenValid(jwtToken, userDetails)) {
-                    val authentication = UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                    )
-                    authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
-                    SecurityContextHolder.getContext().authentication = authentication
+                if (!tokenHandler.isTokenValid(jwtToken, userDetails)) {
+                    throw BadCredentialsException("Invalid or expired JWT token")
                 }
+
+                val authentication = UsernamePasswordAuthenticationToken(
+                    userDetails,
+                    null,
+                    userDetails.authorities
+                )
+                authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
+                SecurityContextHolder.getContext().authentication = authentication
             }
-        } catch (ex: Exception) {
-            logger.error("JWT authentication failed: ${ex.message}")
+        } catch (ex: AuthenticationException) {
+            SecurityContextHolder.clearContext()
+            throw ex
         }
 
         filterChain.doFilter(request, response)
     }
 
-    private fun getTokenFromRequest(
-        request: HttpServletRequest,
-        cookieName: String
-    ): String? {
-        return request.cookies
-            ?.firstOrNull { it.name == cookieName }
-            ?.value
-    }
-
-    companion object{
-        const val AUTHORIZATION_HEADER = "Authorization"
-        const val AUTHORIZATION_BEARER = "Bearer "
+    private fun getTokenFromRequest(request: HttpServletRequest, cookieName: String): String? {
+        return request.cookies?.firstOrNull { it.name == cookieName }?.value
     }
 }

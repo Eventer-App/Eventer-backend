@@ -10,3 +10,7 @@ open class GeneralException(
 open class RegisterException(
     var status: HttpStatus = HttpStatus.BAD_REQUEST,
 ) : RuntimeException()
+
+class AuthException(
+    status: HttpStatus = HttpStatus.BAD_REQUEST,
+) : RegisterException(status)
