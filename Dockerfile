@@ -5,7 +5,7 @@ FROM gradle:8.4-jdk21 AS builder
 WORKDIR /app
 
 # Копируем файлы конфигурации Gradle и исходники
-COPY build.gradle.kts settings.gradle.kts ./
+COPY build.gradle settings.gradle ./
 COPY gradle ./gradle
 COPY src ./src
 
