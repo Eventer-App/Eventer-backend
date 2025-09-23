@@ -40,9 +40,9 @@ spring:
       on-profile: DEV
 
   datasource:
-    url: jdbc:postgresql://84.201.150.241:5432/EVENTER
-    username: eventer
-    password: eventer
+    url: jdbc:postgresql://${DB_IP}:5432/${DB}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
