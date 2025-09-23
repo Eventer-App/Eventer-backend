@@ -1,0 +1,61 @@
+name: Deploy Backend to Yandex Cloud
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy"
+        required: true
+        default: master
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Yandex Cloud Container Registry
+        id: login-cr
+        uses: yc-actions/yc-cr-login@v3
+        with:
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+
+      - name: Build, tag, and push image to Yandex Cloud Container Registry
+        env:
+          CR_REGISTRY: ${{ secrets.YA_REGISTRY }}
+          CR_REPOSITORY: eventer-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t cr.yandex/$CR_REGISTRY/$CR_REPOSITORY:$IMAGE_TAG .
+          docker push cr.yandex/$CR_REGISTRY/$CR_REPOSITORY:$IMAGE_TAG
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo 'source /home/eventer/yandex-cloud/completion.zsh.inc' >>  ~/.zshrc
+            exec -l $SHELL
+            IAM_TOKEN=$(yc iam create-token)
+            echo $IAM_TOKEN|docker login \
+            --username iam \
+            --password-stdin \
+            cr.yandex
+            
+            IMAGE="${{ secrets.YA_REGISTRY }}/eventer-backend:${{ github.sha }}"
+            CONTAINER_NAME=eventer-backend
+
+            docker pull $IMAGE
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+            docker run -d --name $CONTAINER_NAME -p 8080:8080 $IMAGE --env-file ~/backend/.env

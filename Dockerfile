@@ -20,9 +20,6 @@ WORKDIR /app
 # Копируем JAR-файл из стадии сборки
 COPY --from=builder /app/build/libs/*.jar app.jar
 
-# Указываем активный профиль
-ENV SPRING_PROFILES_ACTIVE=LOCAL
-
 # Открываем порт
 EXPOSE 8080
 
