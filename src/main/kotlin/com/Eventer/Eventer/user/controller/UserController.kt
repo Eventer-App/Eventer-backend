@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/v1/users")
 class UserController(
     val userService: UserService
 ) : UserControllerDoc {
