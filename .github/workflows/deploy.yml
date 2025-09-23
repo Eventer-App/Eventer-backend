@@ -77,6 +77,9 @@ jobs:
           
             # Проверяем статус контейнера
             docker ps -f name="$CONTAINER_NAME"
+
+            # Подключаем контейнер к сети докера
+            docker network connect eventer-net $CONTAINER_NAME
           
             # Очищаем старые образы
             docker image prune -f
